@@ -1,28 +1,24 @@
-import { Injectable } from '@nestjs/common'
 import { camelCase, mapValues, upperFirst } from 'lodash'
 import { EntityManager } from 'typeorm'
 import { tz } from 'typeorm-zod'
-import { isFunction, MapUtil, objectEntries, objectKeys } from 'ytil'
+import { deepMapValues, isFunction, MapUtil, objectEntries, objectKeys } from 'ytil'
 
 import { AnyFixture, BoundFixtures, fixtureEntity, FixtureInstance } from './types'
 import { isFixtureInput } from './util'
 
-@Injectable()
 export class FixtureProvider {
 
   constructor(
-    private entityManager: EntityManager,
+    private readonly entityManager: EntityManager,
   ) {}
 
   private readonly dependencies = new WeakMap<AnyFixture, Set<AnyFixture>>()
   private readonly instances = new WeakMap<AnyFixture, object>()
 
   public bind<F extends Record<string, any>>(fixtures: F): BoundFixtures<F> {
-    return mapValues(fixtures, value => {
+    return deepMapValues(fixtures, value => {
       if (isFixtureInput(value)) {
         return () => this.buildFixtureInstance(value)
-      } else {
-        return value
       }
     }) as BoundFixtures<F>
   }
