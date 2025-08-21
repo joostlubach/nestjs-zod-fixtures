@@ -1,0 +1,40 @@
+{
+  "name": "nestjs-zod-fixtures",
+  "version": "0.0.1",
+  "description": "Zod-based fixtures for NestJS applications",
+  "private": true,
+  "author": "Joost Lubach <joostlubach@gmail.com>",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "pnpm clean && pnpm build:tsc",
+    "build:tsc": "tsc -p tsconfig.prod.json",
+    "clean": "rimraf dist",
+    "lint": "eslint src --ext .ts",
+    "check": "tsc -p . --noEmit",
+    "test": "NODE_ENV=test jest"
+  },
+  "devDependencies": {
+    "@types/lodash": "^4.17.20",
+    "buffer": "^6.0.3",
+    "copyfiles": "^2.4.1",
+    "js-yaml": "^4.1.0",
+    "rimraf": "^6.0.1",
+    "tsc-alias": "^1.8.16",
+    "typescript": "5.9.2"
+  },
+  "dependencies": {
+    "@msgpack/msgpack": "3.0.0-beta2",
+    "@nestjs/common": "^10.0.0",
+    "lodash": "^4.17.21",
+    "typeorm": "^0.3.26",
+    "typeorm-zod": "workspace:^",
+    "ytil": "workspace:^"
+  },
+  "packageManager": "pnpm@9.9.0"
+}
