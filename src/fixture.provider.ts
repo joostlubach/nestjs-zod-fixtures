@@ -60,7 +60,7 @@ export class FixtureProvider {
   }
 
   private fixturize<F extends AnyFixture>(fixture: F, instance: InstanceType<fixtureEntity<F>>): FixtureInstance<F> {
-    for (const key of objectKeys(tz.collectSchema(fixture.Entity).shape)) {
+    for (const key of objectKeys(tz.collectSchema(fixture.Entity).columns)) {
       if (typeof key !== 'string') { continue }
 
       const setterName = `with${upperFirst(camelCase(key))}`
