@@ -56,7 +56,7 @@ export type FixtureModifiers<F extends AnyFixture> = {
 }
 export type FixtureModifier<F extends AnyFixture, I extends FixtureModifierInput<any, any[]>> = (...args: modifierArgs<I>) => FixtureInstance<F>
 export type AutoModifiers<F extends AnyFixture> = {
-  [K in keyof tz.schemaAttributes<fixtureEntity<F>> as `with${Capitalize<string & K>}`]: (value: tz.schemaAttributes<fixtureEntity<F>>[K]) => FixtureInstance<F>
+  [K in keyof tz.schemaAttributes<fixtureEntity<F>> as `with_${string & K}`]: (value: tz.schemaAttributes<fixtureEntity<F>>[K]) => FixtureInstance<F>
 }
 
 export interface FixtureCommon<F extends AnyFixture> {

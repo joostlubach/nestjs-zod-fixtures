@@ -1,4 +1,4 @@
-import { camelCase, mapValues, upperFirst } from 'lodash'
+import { mapValues } from 'lodash'
 import { EntityManager } from 'typeorm'
 import { tz } from 'typeorm-zod'
 import { deepMapValues, isFunction, MapUtil, objectEntries, objectKeys } from 'ytil'
@@ -63,7 +63,7 @@ export class FixtureProvider {
     for (const key of objectKeys(tz.collectSchema(fixture.Entity).columns)) {
       if (typeof key !== 'string') { continue }
 
-      const setterName = `with${upperFirst(camelCase(key))}`
+      const setterName = `with_${key}`
       Object.defineProperty(instance, setterName, {
         value: function (value: any) {
           this[key] = value
