@@ -1,6 +1,6 @@
 import { AnyConstructor, isFunction } from 'ytil'
 
-import { AnyFixture, Fixture, fixtureEntity, FixtureInit, FixtureModifiersInput } from './types'
+import { AnyFixture, Fixture, FixtureInit, fixtureInstance, FixtureModifiersInput } from './types'
 
 export function fixture<E extends AnyConstructor, Mod extends FixtureModifiersInput<E>>(
   Entity: E,
@@ -24,18 +24,16 @@ export function fixture<E extends AnyConstructor>(
   }
 }
 
-export function related<S extends AnyFixture, F extends AnyFixture>(
+export function related<Owner extends AnyFixture, F extends AnyFixture>(
   fixture: F,
-  init: (source: InstanceType<fixtureEntity<S>>) => FixtureInit<F>,
+  init: (source: fixtureInstance<Owner>) => FixtureInit<F>,
 ): F {
-  // Create a new fixture that inits the 
-
   return {
     ...fixture,
-    init: (source?: object) => {
+    init: (ownerInstance?: object) => {
       return {
-        ...isFunction(fixture.init) ? fixture.init(source) : fixture.init,
-        ...init(source as InstanceType<fixtureEntity<S>>),
+        ...isFunction(fixture.init) ? fixture.init(ownerInstance) : fixture.init,
+        ...init(ownerInstance as fixtureInstance<Owner>),
       }
     },
   }

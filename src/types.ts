@@ -34,12 +34,34 @@ export type FixtureModifierInput<E extends AnyConstructor, A extends any[]> = (t
 
 export interface FixtureModifierContext {
   entityManager: EntityManager
-  addDependency: (dependency: AnyFixture) => void
-  addRelated:    (related: object | (() => object)) => void
+
+  addDependencyBefore(arg: AnyFixture | object): void
+  addDependencyAfter(arg: AnyFixture | object): void
+}
+
+// Dependencies
+
+export interface Dependency {
+  /** The fixture, if the dependency was specified as a fixture. */
+  fixture: AnyFixture | null
+  
+  /** The dependency instance itself. This is either built from the fixture, or specified manually. */
+  instance: () => object
+
+  /**
+   * A flag that indicates whether the dependency should be saved before the fixture. Due to how
+   * databases store relationships, you must ensure that the side that stores the foreign key
+   * is saved last, and the side that contains the referenced primary key is saved first.
+   * 
+   * Typically, you want to specify `'before'` for ManyToOne and OneToOne(owner) relationships,
+   * and `'after'` for OneToMany and OneToOne(inverse) relationships.
+   */
+  saveOrder: 'before' | 'after'
 }
 
 // Type extractors.
 export type fixtureEntity<F extends AnyFixture> = F extends Fixture<infer E, any> ? E : never
+export type fixtureInstance<F extends AnyFixture> = F extends Fixture<infer E, any> ? (InstanceType<E> & object) : never
 export type fixtureModifiers<F extends AnyFixture> = F extends Fixture<any, infer M> ? M : never
 export type modifierArgs<M extends FixtureModifierInput<any, any>> = M extends FixtureModifierInput<any, infer A> ? A : never
 

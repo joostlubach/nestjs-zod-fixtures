@@ -1,4 +1,4 @@
-import { mapValues } from 'lodash'
+import { isArray, mapValues } from 'lodash'
 import { EntityManager } from 'typeorm'
 import { tz } from 'typeorm-zod'
 import { deepMapValues, isFunction, MapUtil, objectEntries, objectKeys } from 'ytil'
@@ -6,8 +6,9 @@ import { deepMapValues, isFunction, MapUtil, objectEntries, objectKeys } from 'y
 import {
   AnyFixture,
   BoundFixtures,
-  fixtureEntity,
+  Dependency,
   FixtureInstance,
+  fixtureInstance,
   FixtureModifierContext,
 } from './types'
 import { isFixture } from './util'
@@ -18,10 +19,8 @@ export class FixtureProvider {
     private readonly entityManager: EntityManager,
   ) {}
 
-  private readonly dependencies = new WeakMap<AnyFixture, Set<AnyFixture>>()
-  private readonly related = new WeakMap<AnyFixture, Set<object | (() => object)>>()
-
-  private readonly instances = new WeakMap<AnyFixture, object>()
+  private readonly dependencies = new Map<AnyFixture, Dependency[]>()
+  private readonly instances = new Map<AnyFixture, object>()
 
   public bind<F extends Record<string, any>>(fixtures: F): BoundFixtures<F> {
     return deepMapValues(fixtures, value => {
@@ -31,43 +30,67 @@ export class FixtureProvider {
     }) as BoundFixtures<F>
   }
 
+  public reset() {
+    this.dependencies.clear()
+    this.instances.clear()
+  }
+
   // #region Building
 
-  private buildFixtureInstance<F extends AnyFixture>(fixture: F, source?: object): InstanceType<fixtureEntity<F>> {
+  private buildFixtureInstance<F extends AnyFixture>(fixture: F, ownerInstance?: object): fixtureInstance<F> {
     const instance = this.buildOrReuseInstance(fixture)
-    this.initFixture(fixture, instance, source)
+    this.initFixture(fixture, instance, ownerInstance)
     this.fixturize(fixture, instance)
     return instance
   }
 
-  private buildOrReuseInstance<F extends AnyFixture>(fixture: F): InstanceType<fixtureEntity<F>> {
-    const existing = this.instances.get(fixture) as InstanceType<fixtureEntity<F>> | undefined
+  private buildOrReuseInstance<F extends AnyFixture>(fixture: F): fixtureInstance<F> {
+    const existing = this.instances.get(fixture) as fixtureInstance<F> | undefined
     if (existing != null) { return existing }
 
-    const repository = this.entityManager.getRepository<InstanceType<fixtureEntity<F>>>(fixture.Entity)
+    const repository = this.entityManager.getRepository<fixtureInstance<F>>(fixture.Entity)
     const instance = repository.create()
     tz.applyDefaults(instance)
     this.instances.set(fixture, instance)
     return instance
   }
 
-  private initFixture<F extends AnyFixture>(fixture: F, instance: InstanceType<fixtureEntity<F>>, source?: object): void {
+  private initFixture<F extends AnyFixture>(fixture: F, instance: fixtureInstance<F>, ownerInstance?: object): void {
     if (fixture.init == null) { return }
 
-    const init = isFunction(fixture.init) ? fixture.init(source) : fixture.init
+    const init = isFunction(fixture.init) ? fixture.init(ownerInstance) : fixture.init
     for (const [key, value] of objectEntries(init)) {
-      if (isFixture(value)) {
-        this.addDependency(fixture, value)
-        instance[key] = this.buildFixtureInstance(value, instance)
-      } else if (isFunction(value)) {
-        instance[key] = value()
-      } else {
-        instance[key] = value
-      }
+      instance[key] = this.resolveProp(fixture, instance, value)
     }
   }
 
-  private fixturize<F extends AnyFixture>(fixture: F, instance: InstanceType<fixtureEntity<F>>): FixtureInstance<F> {
+  private resolveProp(fixture: AnyFixture, instance: object, value: any): any {
+    if (isFixture(value)) {
+      return this.resolveDependency(fixture, instance, value, 'before')
+    } else if (isArray(value) && value.every(it => isFixture(it))) {
+      return value.map(it => this.resolveDependency(fixture, instance, it, 'after'))
+    } else if (isFunction(value)) {
+      return value()
+    } else {
+      return value
+    }
+
+  }
+
+  private resolveDependency(ownerFixture: AnyFixture, ownerInstance: object | undefined, value: AnyFixture | (() => object) | object, saveOrder: 'before' | 'after'): object {
+    const instance = isFixture(value)
+      ? this.buildFixtureInstance(value, ownerInstance)
+      : value
+
+    if (isFixture(value)) {
+      this.addDependency(ownerFixture, value, instance, saveOrder)
+    } else {
+      this.addDependency(ownerFixture, instance, saveOrder)
+    }
+    return instance
+  }
+
+  private fixturize<F extends AnyFixture>(fixture: F, instance: fixtureInstance<F>): FixtureInstance<F> {
     for (const key of objectKeys(tz.collectSchema(fixture.Entity).columns)) {
       if (typeof key !== 'string') { continue }
 
@@ -84,8 +107,12 @@ export class FixtureProvider {
 
     const context: FixtureModifierContext = {
       entityManager: this.entityManager,
-      addDependency: this.addDependency.bind(this, fixture),
-      addRelated:    this.addRelated.bind(this, fixture)
+      addDependencyBefore: arg => {
+        this.resolveDependency(fixture, instance, arg, 'before')
+      },
+      addDependencyAfter: arg => {
+        this.resolveDependency(fixture, instance, arg, 'after')
+      }
     }
 
     Object.assign(instance, mapValues(fixture.modifiers, modifier => {
@@ -110,16 +137,15 @@ export class FixtureProvider {
 
   // #region Saving
 
-  private async saveFixtureInstance<F extends AnyFixture>(fixture: F, instance: FixtureInstance<F>) {
-    // First, save all dependencies.
-    // Note: don't use Promise.all() here, to prevent a double dependency from being saved twice.
-    for (const dependency of this.dependencies.get(fixture) ?? []) {
-      if (isFixture<any, any>(dependency)) {
-        const instance = this.buildFixtureInstance(dependency)
-        if (instance == null) { continue }
-        if ('id' in instance && instance.id != null) { continue }
-
-        await this.saveFixtureInstance(dependency, instance)
+  private async saveFixtureInstance<F extends AnyFixture>(fixture: F, instance: object) {
+    const dependencies = this.dependencies.get(fixture) ?? []
+    
+    for (const dependency of dependencies.filter(it => it.saveOrder === 'before')) {
+      const dependencyInstance = dependency.instance()
+      if (dependency.fixture != null) {
+        await this.saveFixtureInstance(dependency.fixture, dependencyInstance)
+      } else {
+        await this.entityManager.save(dependencyInstance)
       }
     }
 
@@ -127,10 +153,13 @@ export class FixtureProvider {
     const saved = await repository.save(instance)
     Object.assign(instance, {...saved})
 
-    // After saving, and assigning back the ID, save related objects.
-    for (const related of this.related.get(fixture) ?? []) {
-      const instance = isFunction(related) ? related() : related
-      await this.entityManager.save(instance)
+    for (const dependency of dependencies.filter(it => it.saveOrder === 'after')) {
+      const dependencyInstance = dependency.instance()
+      if (dependency.fixture != null) {
+        await this.saveFixtureInstance(dependency.fixture, dependencyInstance)
+      } else {
+        await this.entityManager.save(dependencyInstance)
+      }
     }
 
     return instance
@@ -140,14 +169,19 @@ export class FixtureProvider {
 
   // #region Dependencies
 
-  private addDependency(fixture: AnyFixture, dependency: AnyFixture) {
-    const deps = MapUtil.ensure(this.dependencies, fixture, () => new Set())
-    deps.add(dependency)
-  }
+  private addDependency(owner: AnyFixture, fixture: AnyFixture, instance: object, saveOrder: 'before' | 'after'): void
+  private addDependency(owner: AnyFixture, instance: object | (() => object), saveOrder: 'before' | 'after'): void
+  private addDependency(owner: AnyFixture, ...args: any[]) {
+    const fixture = isFixture(args[0]) ? (args.shift() as AnyFixture) : null
+    const instance = args.shift() as object | (() => object)
+    const saveOrder = args.shift() as 'before' | 'after'
 
-  private addRelated(from: AnyFixture, related: object | (() => object)) {
-    const relateds = MapUtil.ensure(this.related, from, () => new Set())
-    relateds.add(related)
+    const deps = MapUtil.ensure(this.dependencies, owner, () => [])
+    deps.push({
+      fixture, 
+      instance: isFunction(instance) ? instance : () => instance, 
+      saveOrder
+    })
   }
 
   // #endregion
