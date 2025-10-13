@@ -3,8 +3,14 @@ import { EntityManager } from 'typeorm'
 import { tz } from 'typeorm-zod'
 import { deepMapValues, isFunction, MapUtil, objectEntries, objectKeys } from 'ytil'
 
-import { AnyFixture, BoundFixtures, fixtureEntity, FixtureInstance } from './types'
-import { isFixtureInput } from './util'
+import {
+  AnyFixture,
+  BoundFixtures,
+  fixtureEntity,
+  FixtureInstance,
+  FixtureModifierContext,
+} from './types'
+import { isFixture } from './util'
 
 export class FixtureProvider {
 
@@ -13,11 +19,13 @@ export class FixtureProvider {
   ) {}
 
   private readonly dependencies = new WeakMap<AnyFixture, Set<AnyFixture>>()
+  private readonly related = new WeakMap<AnyFixture, Set<object | (() => object)>>()
+
   private readonly instances = new WeakMap<AnyFixture, object>()
 
   public bind<F extends Record<string, any>>(fixtures: F): BoundFixtures<F> {
     return deepMapValues(fixtures, value => {
-      if (isFixtureInput(value)) {
+      if (isFixture(value)) {
         return () => this.buildFixtureInstance(value)
       }
     }) as BoundFixtures<F>
@@ -25,7 +33,7 @@ export class FixtureProvider {
 
   // #region Building
 
-  private buildFixtureInstance<F extends AnyFixture>(fixture: F, source?: object) {
+  private buildFixtureInstance<F extends AnyFixture>(fixture: F, source?: object): InstanceType<fixtureEntity<F>> {
     const instance = this.buildOrReuseInstance(fixture)
     this.initFixture(fixture, instance, source)
     this.fixturize(fixture, instance)
@@ -48,7 +56,7 @@ export class FixtureProvider {
 
     const init = isFunction(fixture.init) ? fixture.init(source) : fixture.init
     for (const [key, value] of objectEntries(init)) {
-      if (isFixtureInput(value)) {
+      if (isFixture(value)) {
         this.addDependency(fixture, value)
         instance[key] = this.buildFixtureInstance(value, instance)
       } else if (isFunction(value)) {
@@ -74,16 +82,22 @@ export class FixtureProvider {
       })
     }
 
+    const context: FixtureModifierContext = {
+      entityManager: this.entityManager,
+      addDependency: this.addDependency.bind(this, fixture),
+      addRelated:    this.addRelated.bind(this, fixture)
+    }
+
     Object.assign(instance, mapValues(fixture.modifiers, modifier => {
       return (...args: any[]) => {
-        const result = modifier(instance, ...args)
+        const result = modifier.call(context, instance, ...args)
         return result ?? instance
       }
     }))
 
     Object.defineProperty(instance, 'save', {
-      value: (includeDependencies = true) => (
-        this.saveFixtureInstance(fixture, instance, includeDependencies)
+      value: () => (
+        this.saveFixtureInstance(fixture, instance)
       ),
       enumerable: false,
       writable:   true,
@@ -96,21 +110,28 @@ export class FixtureProvider {
 
   // #region Saving
 
-  private async saveFixtureInstance<F extends AnyFixture>(fixture: F, instance: FixtureInstance<F>, includeDependencies: boolean) {
-    if (includeDependencies) {
-      // Don't use Promise.all() here, to prevent a double dependency from being saved twice.
-      for (const dependency of this.dependencies.get(fixture) ?? []) {
-        const dep_instance = this.buildFixtureInstance(dependency)
-        if (dep_instance == null) { continue }
-        if ('id' in dep_instance && dep_instance.id != null) { continue }
-        
-        await this.saveFixtureInstance(dependency, dep_instance, true)
+  private async saveFixtureInstance<F extends AnyFixture>(fixture: F, instance: FixtureInstance<F>) {
+    // First, save all dependencies.
+    // Note: don't use Promise.all() here, to prevent a double dependency from being saved twice.
+    for (const dependency of this.dependencies.get(fixture) ?? []) {
+      if (isFixture<any, any>(dependency)) {
+        const instance = this.buildFixtureInstance(dependency)
+        if (instance == null) { continue }
+        if ('id' in instance && instance.id != null) { continue }
+
+        await this.saveFixtureInstance(dependency, instance)
       }
     }
 
     const repository = this.entityManager.getRepository(fixture.Entity)
     const saved = await repository.save(instance)
     Object.assign(instance, {...saved})
+
+    // After saving, and assigning back the ID, save related objects.
+    for (const related of this.related.get(fixture) ?? []) {
+      const instance = isFunction(related) ? related() : related
+      await this.entityManager.save(instance)
+    }
 
     return instance
   }
@@ -119,9 +140,14 @@ export class FixtureProvider {
 
   // #region Dependencies
 
-  private addDependency(from: AnyFixture, to: AnyFixture) {
-    const deps = MapUtil.ensure(this.dependencies, from, () => new Set())
-    deps.add(to)
+  private addDependency(fixture: AnyFixture, dependency: AnyFixture) {
+    const deps = MapUtil.ensure(this.dependencies, fixture, () => new Set())
+    deps.add(dependency)
+  }
+
+  private addRelated(from: AnyFixture, related: object | (() => object)) {
+    const relateds = MapUtil.ensure(this.related, from, () => new Set())
+    relateds.add(related)
   }
 
   // #endregion

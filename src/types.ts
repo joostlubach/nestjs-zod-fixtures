@@ -1,3 +1,4 @@
+import { EntityManager } from 'typeorm'
 import { tz } from 'typeorm-zod'
 import { AnyConstructor, AnyFunction } from 'ytil'
 
@@ -14,6 +15,7 @@ export interface Fixture<E extends AnyConstructor, Mod extends FixtureModifiersI
 }
 
 export type AnyFixture = Fixture<any, any>
+export type AnyFixtureOf<E extends AnyConstructor> = Fixture<E, any>
 
 export type FixtureInit<S extends AnyFixture> = {
   [K in keyof InstanceType<fixtureEntity<S>>]?:
@@ -28,12 +30,16 @@ export type FixtureInit<S extends AnyFixture> = {
 }
 
 export type FixtureModifiersInput<E extends AnyConstructor> = Record<string, FixtureModifierInput<E, any>>
-export type FixtureModifierInput<E extends AnyConstructor, A extends any[]> = (entity: InstanceType<E>, ...args: A) => E | void
+export type FixtureModifierInput<E extends AnyConstructor, A extends any[]> = (this: FixtureModifierContext, entity: InstanceType<E>, ...args: A) => E | void
 
-export type FixtureWith<S extends AnyFixture> = (instance: InstanceType<fixtureEntity<S>>) => AnyFixture
+export interface FixtureModifierContext {
+  entityManager: EntityManager
+  addDependency: (dependency: AnyFixture) => void
+  addRelated:    (related: object | (() => object)) => void
+}
 
 // Type extractors.
-export type fixtureEntity<F extends AnyFixture> = F extends Fixture<infer E, infer M> ? E : never
+export type fixtureEntity<F extends AnyFixture> = F extends Fixture<infer E, any> ? E : never
 export type fixtureModifiers<F extends AnyFixture> = F extends Fixture<any, infer M> ? M : never
 export type modifierArgs<M extends FixtureModifierInput<any, any>> = M extends FixtureModifierInput<any, infer A> ? A : never
 
