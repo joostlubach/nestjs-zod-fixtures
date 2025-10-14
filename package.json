@@ -35,6 +35,5 @@
     "lodash": "^4.17.21",
     "typeorm-zod": "workspace:^",
     "ytil": "workspace:^"
-  },
-  "packageManager": "pnpm@9.9.0"
+  }
 }
