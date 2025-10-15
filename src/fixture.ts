@@ -1,21 +1,22 @@
-import { AnyConstructor, isFunction } from 'ytil'
+import { snakeCase } from 'lodash'
+import { AnyConstructor } from 'ytil'
 
 import { AnyFixture, Fixture, FixtureInit, fixtureInstance, FixtureModifiersInput } from './types'
 
-export function fixture<E extends AnyConstructor, Mod extends FixtureModifiersInput<E>>(
+export function fixture<E extends AnyConstructor, Init extends () => FixtureInit<E>, Mod extends FixtureModifiersInput<E>>(
   Entity: E,
-  init: FixtureInit<Fixture<E, Mod>>,
+  init: Init,
   modifiers: Mod,
-): Fixture<E, Mod>
-export function fixture<E extends AnyConstructor>(
+): Fixture<E, Init, Mod>
+export function fixture<E extends AnyConstructor, Init extends () => FixtureInit<E>>(
   Entity: E,
-  init: FixtureInit<Fixture<E, {}>>,
-): Fixture<E, {}>
-export function fixture<E extends AnyConstructor>(
+  init: Init,
+): Fixture<E, Init, {}>
+export function fixture<E extends AnyConstructor, Init extends () => FixtureInit<E>>(
   Entity: E,
-  init: FixtureInit<Fixture<E, any>>,
+  init: Init,
   modifiers: Record<string, any> = {},
-): Fixture<E, any> {
+): Fixture<E, Init, any> {
   return {
     [FIXTURE]: true,
     Entity, 
@@ -26,16 +27,14 @@ export function fixture<E extends AnyConstructor>(
 
 export function related<Owner extends AnyFixture, F extends AnyFixture>(
   fixture: F,
-  init: (source: fixtureInstance<Owner>) => FixtureInit<F>,
+  setOwner: (instance: fixtureInstance<F>, ownerInstance: fixtureInstance<Owner>) => void,
 ): F {
   return {
     ...fixture,
-    init: (ownerInstance?: object) => {
-      return {
-        ...isFunction(fixture.init) ? fixture.init(ownerInstance) : fixture.init,
-        ...init(ownerInstance as fixtureInstance<Owner>),
-      }
-    },
+    setOwner: setOwner ?? ((instance, ownerInstance) => {
+      const inferredOwnerKey = snakeCase(ownerInstance.constructor.name)
+      instance[inferredOwnerKey] = ownerInstance
+    })
   }
 }
 

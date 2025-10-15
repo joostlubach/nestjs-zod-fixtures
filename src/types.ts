@@ -6,23 +6,24 @@ import { FIXTURE } from './fixture'
 
 // #region Unbound (input) fixture types
 
-export interface Fixture<E extends AnyConstructor, Mod extends FixtureModifiersInput<E>> {
+export interface Fixture<E extends AnyConstructor, Init extends () => FixtureInit<E>, Mod extends FixtureModifiersInput<E>> {
   [FIXTURE]: true
 
   Entity:    E
-  init?:     FixtureInit<Fixture<E, Mod>> | ((source?: object) => Fixture<E, Mod>)
+  init?:     Init
+  setOwner?: (instance: InstanceType<E>, ownerInstance: object) => Init
   modifiers: Mod
 }
 
-export type AnyFixture = Fixture<any, any>
-export type AnyFixtureOf<E extends AnyConstructor> = Fixture<E, any>
+export type AnyFixture = Fixture<any, any, any>
+export type AnyFixtureOf<E extends AnyConstructor> = Fixture<E, any, any>
 
-export type FixtureInit<S extends AnyFixture> = {
-  [K in keyof InstanceType<fixtureEntity<S>>]?:
+export type FixtureInit<E extends AnyConstructor> = {
+  [K in keyof InstanceType<E>]?:
     // A single value is allowed.
-    | InstanceType<fixtureEntity<S>>[K]
+    | InstanceType<E>[K]
     // Some function that returns a value is allowed (supports @faker-js and stuff).
-    | (() => InstanceType<fixtureEntity<S>>[K])
+    | (() => InstanceType<E>[K])
     // A related fixture is allowed.
     | AnyFixture
     // For ToMany relationships, we accept an array of related fixtures.
@@ -35,8 +36,8 @@ export type FixtureModifierInput<E extends AnyConstructor, A extends any[]> = (t
 export interface FixtureModifierContext {
   entityManager: EntityManager
 
-  addDependencyBefore(arg: AnyFixture | object): void
-  addDependencyAfter(arg: AnyFixture | object): void
+  addOwnerDependency(arg: AnyFixture | object): void
+  addOwnedDependency(arg: AnyFixture | object): void
 }
 
 // Dependencies
@@ -60,9 +61,10 @@ export interface Dependency {
 }
 
 // Type extractors.
-export type fixtureEntity<F extends AnyFixture> = F extends Fixture<infer E, any> ? E : never
-export type fixtureInstance<F extends AnyFixture> = F extends Fixture<infer E, any> ? (InstanceType<E> & object) : never
-export type fixtureModifiers<F extends AnyFixture> = F extends Fixture<any, infer M> ? M : never
+export type fixtureEntity<F extends AnyFixture> = F extends Fixture<infer E, any, any> ? E : never
+export type fixtureInitArgs<F extends AnyFixture> = F extends Fixture<any, (...args: infer A extends any[]) => any, any> ? A : never
+export type fixtureInstance<F extends AnyFixture> = F extends Fixture<infer E, any, any> ? (InstanceType<E> & object) : never
+export type fixtureModifiers<F extends AnyFixture> = F extends Fixture<any, any, infer M> ? M : never
 export type modifierArgs<M extends FixtureModifierInput<any, any>> = M extends FixtureModifierInput<any, infer A> ? A : never
 
 // #endregion
@@ -76,7 +78,7 @@ export type BoundFixtures<F> = {
       : BoundFixtures<F[K]>
 }
 
-export type BoundFixture<F extends AnyFixture> = () => FixtureInstance<F>
+export type BoundFixture<F extends AnyFixture> = (...args: fixtureInitArgs<F>) => FixtureInstance<F>
 export type FixtureInstance<F extends AnyFixture> = InstanceType<fixtureEntity<F>> & AutoModifiers<F> & FixtureModifiers<F> & FixtureCommon<F>
 
 export type FixtureModifiers<F extends AnyFixture> = {
