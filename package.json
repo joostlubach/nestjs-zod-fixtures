@@ -17,7 +17,7 @@
     "clean": "rimraf dist",
     "lint": "eslint src --ext .ts",
     "check": "tsc -p . --noEmit",
-    "test": "NODE_ENV=test jest"
+    "test": "vitest run"
   },
   "devDependencies": {
     "@types/lodash": "^4.17.20",
@@ -26,7 +26,8 @@
     "js-yaml": "^4.1.0",
     "rimraf": "^6.0.1",
     "tsc-alias": "^1.8.16",
-    "typescript": "5.8.3"
+    "typescript": "5.8.3",
+    "vitest": "^4.0.0"
   },
   "peerDependencies": {
     "typeorm": "*"
