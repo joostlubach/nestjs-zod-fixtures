@@ -1,6 +1,5 @@
 import { snakeCase } from 'lodash'
 import { AnyConstructor } from 'ytil'
-
 import { AnyFixture, Fixture, FixtureInit, fixtureInstance, FixtureModifiersInput } from './types'
 
 export function fixture<E extends AnyConstructor, Init extends () => FixtureInit<E>, Mod extends FixtureModifiersInput<E>>(
@@ -15,7 +14,7 @@ export function fixture<E extends AnyConstructor, Init extends () => FixtureInit
 export function fixture<E extends AnyConstructor, Init extends () => FixtureInit<E>>(
   Entity: E,
   init: Init,
-  modifiers: Record<string, any> = {},
+  modifiers: Record<string, unknown> = {},
 ): Fixture<E, Init, any> {
   return {
     [FIXTURE]: true,

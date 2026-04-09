@@ -2,11 +2,11 @@ import { isArray, mapValues, snakeCase } from 'lodash'
 import { EntityManager } from 'typeorm'
 import { tz } from 'typeorm-zod'
 import { deepMapValues, isFunction, MapUtil, objectEntries, objectKeys } from 'ytil'
-
 import {
   AnyFixture,
   BoundFixtures,
   Dependency,
+  FixtureInit,
   FixtureInstance,
   fixtureInstance,
   FixtureModifierContext,
@@ -17,6 +17,7 @@ export class FixtureProvider {
 
   constructor(
     private readonly entityManager: EntityManager,
+    private readonly options: FixtureProviderOptions = {},
   ) {}
 
   private readonly dependencies = new Map<AnyFixture, Dependency[]>()
@@ -65,12 +66,18 @@ export class FixtureProvider {
     if (fixture.init == null) { return }
 
     const init = fixture.init(...args)
+    for (const [key, value] of objectEntries(this.options.defaults ?? {})) {
+      if (instance[key] === undefined) {
+        instance[key] = this.resolveProp(fixture, instance, value)
+      }
+    }
+
     for (const [key, value] of objectEntries(init)) {
       instance[key] = this.resolveProp(fixture, instance, value)
     }
   }
 
-  private resolveProp(fixture: AnyFixture, instance: object, value: any): any {
+  private resolveProp(fixture: AnyFixture, instance: object, value: unknown): any {
     if (isFixture(value)) {
       // We assume that toOne relationships are not owned.
       return this.resolveDependency(fixture, instance, value, false)
@@ -82,7 +89,6 @@ export class FixtureProvider {
     } else {
       return value
     }
-
   }
 
   private resolveDependency(ownerFixture: AnyFixture, ownerInstance: object | undefined, value: AnyFixture | (() => object) | object, owned: boolean): object {
@@ -213,4 +219,8 @@ export class FixtureProvider {
 
   // #endregion
 
+}
+
+export interface FixtureProviderOptions {
+  defaults?: FixtureInit<any>
 }
