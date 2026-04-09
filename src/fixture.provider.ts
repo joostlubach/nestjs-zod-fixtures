@@ -80,10 +80,10 @@ export class FixtureProvider {
   private resolveProp(fixture: AnyFixture, instance: object, value: unknown): any {
     if (isFixture(value)) {
       // We assume that toOne relationships are not owned.
-      return this.resolveDependency(fixture, instance, value, false)
+      return this.resolveDependency(fixture, instance, value, [], false)
     } else if (isArray(value) && value.every(it => isFixture(it))) {
       // We do assume that toMany relationships are owned.
-      return value.map(it => this.resolveDependency(fixture, instance, it, true))
+      return value.map(it => this.resolveDependency(fixture, instance, it, [], true))
     } else if (isFunction(value)) {
       return value()
     } else {
@@ -91,12 +91,12 @@ export class FixtureProvider {
     }
   }
 
-  private resolveDependency(ownerFixture: AnyFixture, ownerInstance: object | undefined, value: AnyFixture | (() => object) | object, owned: boolean): object {
+  private resolveDependency<F extends AnyFixture>(ownerFixture: AnyFixture, ownerInstance: object | undefined, value: F | (() => object) | object, args: unknown[], owned: boolean = false): object {
     let instance: object
     
     if (isFixture(value)) {
       // Build the instance.
-      instance = this.buildFixtureInstance(value)
+      instance = this.buildFixtureInstance(value, ...args ?? [])
 
       // If this is an owned dependency, set the owner instance on the owned instance, either through a custom setter,
       // or by default by inferrring the property name from the owner instance's class name.
@@ -140,11 +140,11 @@ export class FixtureProvider {
 
     const context: FixtureModifierContext = {
       entityManager: this.entityManager,
-      addOwnerDependency: arg => {
-        this.resolveDependency(fixture, instance, arg, false)
+      addOwnerDependency: (arg, ...args) => {
+        this.resolveDependency(fixture, instance, arg, args, false)
       },
-      addOwnedDependency: arg => {
-        this.resolveDependency(fixture, instance, arg, true)
+      addOwnedDependency: (arg, ...args) => {
+        this.resolveDependency(fixture, instance, arg, args, true)
       }
     }
 

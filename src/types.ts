@@ -1,7 +1,6 @@
 import { EntityManager } from 'typeorm'
 import { tz } from 'typeorm-zod'
 import { AnyConstructor, AnyFunction } from 'ytil'
-
 import { FIXTURE } from './fixture'
 
 // #region Unbound (input) fixture types
@@ -36,8 +35,8 @@ export type FixtureModifierInput<E extends AnyConstructor, A extends any[]> = (t
 export interface FixtureModifierContext {
   entityManager: EntityManager
 
-  addOwnerDependency(arg: AnyFixture | object): void
-  addOwnedDependency(arg: AnyFixture | object): void
+  addOwnerDependency<F extends AnyFixture>(arg: F | object, ...args: fixtureInitArgs<F>): void
+  addOwnedDependency<F extends AnyFixture>(arg: F | object, ...args: fixtureInitArgs<F>): void
 }
 
 // Dependencies
