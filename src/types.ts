@@ -1,68 +1,62 @@
 import { EntityManager } from 'typeorm'
 import { tz } from 'typeorm-zod'
-import { AnyConstructor, AnyFunction } from 'ytil'
-import { FIXTURE } from './fixture'
+import { AnyConstructor, AnyFunction, Constructor, Primitive } from 'ytil'
+import { FixtureBuilder } from './fixture.builder'
 
 // #region Unbound (input) fixture types
 
 export interface Fixture<E extends AnyConstructor, Init extends () => FixtureInit<E>, Mod extends FixtureModifiersInput<E>> {
-  [FIXTURE]: true
-
-  Entity:    E
-  init?:     Init
-  setOwner?: (instance: InstanceType<E>, ownerInstance: object) => Init
-  modifiers: Mod
+  Entity:     E
+  init?:      Init
+  key?:       (entity: InstanceType<E>) => Primitive
+  modifiers?: Mod
 }
 
-export type AnyFixture = Fixture<any, any, any>
-export type AnyFixtureOf<E extends AnyConstructor> = Fixture<E, any, any>
+export type FixtureOf<E extends AnyConstructor> = Fixture<E, () => FixtureInit<E>, FixtureModifiersInput<E>>
+export type AnyFixture = Fixture<AnyConstructor, () => FixtureInit<AnyConstructor>, FixtureModifiersInput<AnyConstructor>>
 
 export type FixtureInit<E extends AnyConstructor> = {
-  [K in keyof InstanceType<E>]?:
-    // A single value is allowed.
-    | InstanceType<E>[K]
-    // Some function that returns a value is allowed (supports @faker-js and stuff).
-    | (() => InstanceType<E>[K])
-    // A related fixture is allowed.
-    | AnyFixture
-    // For ToMany relationships, we accept an array of related fixtures.
-    | AnyFixture[]
+  [K in keyof InstanceType<E>]?: FixtureInitValue<InstanceType<E>[K]>
 }
 
-export type FixtureModifiersInput<E extends AnyConstructor> = Record<string, FixtureModifierInput<E, any>>
-export type FixtureModifierInput<E extends AnyConstructor, A extends any[]> = (this: FixtureModifierContext, entity: InstanceType<E>, ...args: A) => E | void
+type FixtureInitValue<T> =
+  // A single value is allowed.
+  | T
 
-export interface FixtureModifierContext {
+  // Some function that returns a value is allowed (supports @faker-js and stuff).
+  | (() => T)
+
+  // A related fixture (or builder or instance) is allowed.
+  | (T extends infer U extends object ? FixtureInput<U> : never)
+  | (T extends (infer U extends object) | null ? FixtureInput<U> | null : never)
+  | (T extends Array<infer U extends object> ? FixtureInput<U>[] : never)
+
+
+
+export type FixtureInput<E extends object> = Fixture<Constructor<E>, any, any> | FixtureBuilder<Fixture<Constructor<E>, any, any>> | E
+
+export type FixtureModifiersInput<E extends AnyConstructor> = Record<string, FixtureModifierInput<E, any[]>>
+export type FixtureModifierInput<E extends AnyConstructor, A extends any[]> = (this: FixtureBuildContext, entity: InstanceType<E>, ...args: A) => void
+
+export interface FixtureBuildContext {
   entityManager: EntityManager
 
-  addOwnerDependency<F extends AnyFixture>(arg: F | object, ...args: fixtureInitArgs<F>): void
-  addOwnedDependency<F extends AnyFixture>(arg: F | object, ...args: fixtureInitArgs<F>): void
+  resolve: (value: unknown) => any
+  addDependencyBefore: <F extends AnyFixture>(arg: F | object, ...args: fixtureInitArgs<F>) => void
+  addDependencyAfter: <F extends AnyFixture>(arg: F | object, ...args: fixtureInitArgs<F>) => void
 }
 
 // Dependencies
 
-export interface Dependency {
-  /** The fixture, if the dependency was specified as a fixture. */
-  fixture: AnyFixture | null
-  
-  /** The dependency instance itself. This is either built from the fixture, or specified manually. */
-  instance: () => object
-
-  /**
-   * A flag that indicates whether the dependency should be saved before the fixture. Due to how
-   * databases store relationships, you must ensure that the side that stores the foreign key
-   * is saved last, and the side that contains the referenced primary key is saved first.
-   * 
-   * Typically, you want to specify `'before'` for ManyToOne and OneToOne(owner) relationships,
-   * and `'after'` for OneToMany and OneToOne(inverse) relationships.
-   */
-  saveOrder: 'before' | 'after'
+export enum DependencySaveOrder {
+  Before,
+  After
 }
 
 // Type extractors.
 export type fixtureEntity<F extends AnyFixture> = F extends Fixture<infer E, any, any> ? E : never
+export type fixtureInstance<F extends AnyFixture> = F extends Fixture<infer E, any, any> ? InstanceType<E> & object : never
 export type fixtureInitArgs<F extends AnyFixture> = F extends Fixture<any, (...args: infer A extends any[]) => any, any> ? A : never
-export type fixtureInstance<F extends AnyFixture> = F extends Fixture<infer E, any, any> ? (InstanceType<E> & object) : never
 export type fixtureModifiers<F extends AnyFixture> = F extends Fixture<any, any, infer M> ? M : never
 export type modifierArgs<M extends FixtureModifierInput<any, any>> = M extends FixtureModifierInput<any, infer A> ? A : never
 
@@ -77,19 +71,16 @@ export type BoundFixtures<F> = {
       : BoundFixtures<F[K]>
 }
 
-export type BoundFixture<F extends AnyFixture> = (...args: fixtureInitArgs<F>) => FixtureInstance<F>
-export type FixtureInstance<F extends AnyFixture> = InstanceType<fixtureEntity<F>> & AutoModifiers<F> & FixtureModifiers<F> & FixtureCommon<F>
+export type BoundFixture<F extends AnyFixture> = (...args: fixtureInitArgs<F>) => FixtureBuilderOf<F>
+export type FixtureBuilderOf<F extends AnyFixture> = FixtureBuilder<F> & AutoModifiers<F> & FixtureModifiers<F> 
 
 export type FixtureModifiers<F extends AnyFixture> = {
   [K in keyof fixtureModifiers<F>]: FixtureModifier<F, fixtureModifiers<F>[K]>
 }
-export type FixtureModifier<F extends AnyFixture, I extends FixtureModifierInput<any, any[]>> = (...args: modifierArgs<I>) => FixtureInstance<F>
-export type AutoModifiers<F extends AnyFixture> = {
-  [K in keyof tz.schemaAttributes<fixtureEntity<F>> as `with_${string & K}`]: (value: tz.schemaAttributes<fixtureEntity<F>>[K]) => FixtureInstance<F>
-}
+export type FixtureModifier<F extends AnyFixture, I extends FixtureModifierInput<AnyConstructor, any[]>> = (...args: modifierArgs<I>) => FixtureBuilderOf<F>
 
-export interface FixtureCommon<F extends AnyFixture> {
-  save(includeDependencies?: boolean): Promise<FixtureInstance<F>>
+export type AutoModifiers<F extends AnyFixture> = {
+  [K in keyof tz.schemaAttributes<fixtureEntity<F>> as `with_${string & K}`]: (value: FixtureInitValue<tz.schemaAttributes<fixtureEntity<F>>[K]>) => FixtureBuilderOf<F>
 }
 
 // #endregion
