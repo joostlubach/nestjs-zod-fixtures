@@ -41,6 +41,7 @@ export type FixtureModifierInput<E extends AnyConstructor, A extends any[]> = (t
 export interface FixtureBuildContext {
   entityManager: EntityManager
 
+  builder: <F extends AnyFixture>(fixture: F, ...args: fixtureInitArgs<F>) => FixtureBuilderOf<F>
   resolve: (value: unknown) => any
   addDependencyBefore: <F extends AnyFixture>(arg: F | object, ...args: fixtureInitArgs<F>) => void
   addDependencyAfter: <F extends AnyFixture>(arg: F | object, ...args: fixtureInitArgs<F>) => void

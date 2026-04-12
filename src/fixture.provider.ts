@@ -81,6 +81,9 @@ export class FixtureProvider {
   private buildModifierContext<F extends AnyFixture>(builder: FixtureBuilder<F>): FixtureBuildContext {
     return {
       entityManager: this.entityManager,
+      builder: (fixture, ...args) => {
+        return FixtureBuilder.for(fixture, this, args)
+      },
       resolve: (value: unknown) => {
         return this.resolveProp(builder, value)
       },
