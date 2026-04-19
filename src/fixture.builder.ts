@@ -4,6 +4,7 @@ import { fixture } from './fixture.factory'
 import { FixtureProvider } from './fixture.provider'
 import {
   AnyFixture,
+  FixtureBuildContext,
   FixtureBuilderOf,
   fixtureInitArgs,
   fixtureInstance,
@@ -39,12 +40,14 @@ export class FixtureBuilder<F extends AnyFixture> {
     return builder as FixtureBuilderOf<F>
   }
 
-  public _modifiers: Array<[FixtureModifierInput<AnyConstructor, any[]>, any[]]> = []
+  public _modifiers: Array<[FixtureModifierInput<AnyConstructor, any[]>, any[], boolean]> = []
+  private _inInit: boolean = false
 
   private init() {
     if (this.fixture.init == null) { return }
 
     const inputs = this.fixture.init(...this.initArgs as [])
+    this._inInit = true
     for (const [attribute, input] of objectEntries(inputs)) {
       const modifierName = `with_${attribute}`
       const modifier = (this as any)[modifierName]
@@ -53,8 +56,9 @@ export class FixtureBuilder<F extends AnyFixture> {
         continue
       }
 
-      modifier.call(this, input)
+      modifier.call(this, input, true)
     }
+    this._inInit = false
   }
 
   private defineSetter(attribute: string) {
@@ -72,10 +76,17 @@ export class FixtureBuilder<F extends AnyFixture> {
   private defineModifier(name: string, modifier: FixtureModifierInput<AnyConstructor, any[]>) {
     Object.defineProperty(this, name, {
       value: (...args: any[]) => {
-        this._modifiers.push([modifier, args])
+        this._modifiers.push([modifier, args, this._inInit])
         return this
       },
     })
+  }
+
+  public applyModifiers(instance: fixtureInstance<F>, context: FixtureBuildContext, includeInitModifiers: boolean) {
+    for (const [modifier, args, init] of this._modifiers) {
+      if (!includeInitModifiers && init) { continue }
+      modifier.call(context, instance, ...args)
+    }
   }
 
   public key(instance: fixtureInstance<F>): Primitive | undefined {
@@ -88,6 +99,10 @@ export class FixtureBuilder<F extends AnyFixture> {
 
   public async save(): Promise<fixtureInstance<F>> {
     return await this.provider.saveInstance(this)
+  }
+
+  public async remove(): Promise<void> {
+    await this.provider.removeInstance(this)
   }
 
 }

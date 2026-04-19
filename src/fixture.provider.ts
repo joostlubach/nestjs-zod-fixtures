@@ -55,7 +55,15 @@ export class FixtureProvider {
     // Try to see if there was an existing instance. If so, discard the built one and reuse the existing one.
     const instancesForEntity = this.instances.get(builder.fixture.Entity) ?? new Map()
     const existing = instancesForEntity?.get(key) as fixtureInstance<F> | undefined
-    if (existing != null) { return existing }
+
+    if (existing != null) {
+      // Reapply the modifiers to the existing instance, in case the modifiers augment stuff that is not part
+      // of the key.
+      const context = this.buildModifierContext(builder)
+      builder.applyModifiers(existing, context, false)
+
+      return existing
+    }
 
     instancesForEntity.set(key, instance)
     this.instances.set(builder.fixture.Entity, instancesForEntity)
@@ -69,10 +77,8 @@ export class FixtureProvider {
     const instance = repository.create()
     tz.applyDefaults(instance)
 
-    for (const [modifier, args] of builder._modifiers) {
-      modifier.call(context, instance, ...args)
-    }
-
+    builder.applyModifiers(instance, context, true)
+  
     return instance
   }
 
@@ -140,7 +146,7 @@ export class FixtureProvider {
 
   // #endregion
 
-  // #region Saving
+  // #region Save & delete
 
   public async saveInstance<F extends AnyFixture>(builder: FixtureBuilder<F>, instance?: fixtureInstance<F>): Promise<fixtureInstance<F>> {
     // If no instance given, build it now.
@@ -162,6 +168,14 @@ export class FixtureProvider {
     }
 
     return instance
+  }
+
+  public async removeInstance<F extends AnyFixture>(builder: FixtureBuilder<F>, instance?: fixtureInstance<F>): Promise<void> {
+    // If no instance given, build it now.
+    instance ??= this.getInstance(builder)
+
+    const repository = this.entityManager.getRepository(builder.fixture.Entity)
+    await repository.remove(instance)
   }
 
   // #endregion
