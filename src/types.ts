@@ -2,29 +2,32 @@ import { EntityManager } from 'typeorm'
 import { tz } from 'typeorm-zod'
 import { AnyConstructor, AnyFunction, Constructor, Primitive } from 'ytil'
 import { FixtureBuilder } from './fixture.builder'
+import { FixtureProvider } from './fixture.provider'
 
 // #region Unbound (input) fixture types
 
 export interface Fixture<E extends AnyConstructor, Init extends () => FixtureInit<E>, Mod extends FixtureModifiersInput<E>> {
-  Entity:     E
-  init?:      Init
-  key?:       (entity: InstanceType<E>) => Primitive
-  modifiers?: Mod
+  Entity:      E
+  init?:       Init
+  key?:        (entity: InstanceType<E>) => Primitive
+  beforeSave?: (this: FixtureProvider, entity: InstanceType<E>) => Promise<void> | void
+  modifiers?:  Mod
 }
 
 export type FixtureOf<E extends AnyConstructor> = Fixture<E, () => FixtureInit<E>, FixtureModifiersInput<E>>
 export type AnyFixture = Fixture<AnyConstructor, () => FixtureInit<AnyConstructor>, FixtureModifiersInput<AnyConstructor>>
 
 export type FixtureInit<E extends AnyConstructor> = {
-  [K in keyof InstanceType<E>]?: FixtureInitValue<InstanceType<E>[K]>
+  [K in keyof InstanceType<E>]?: FixtureInitValue<InstanceType<E>, InstanceType<E>[K]>
 }
 
-type FixtureInitValue<T> =
+type FixtureInitValue<E, T> =
   // A single value is allowed.
   | T
 
   // Some function that returns a value is allowed (supports @faker-js and stuff).
-  | (() => T)
+  // Passes the (partially built) instance.
+  | ((instance: E) => T)
 
   // A related fixture (or builder or instance) is allowed.
   | (T extends infer U extends object ? FixtureInput<U> : never)
@@ -81,7 +84,7 @@ export type FixtureModifiers<F extends AnyFixture> = {
 export type FixtureModifier<F extends AnyFixture, I extends FixtureModifierInput<AnyConstructor, any[]>> = (...args: modifierArgs<I>) => FixtureBuilderOf<F>
 
 export type AutoModifiers<F extends AnyFixture> = {
-  [K in keyof tz.schemaAttributes<fixtureEntity<F>> as `with_${string & K}`]: (value: FixtureInitValue<tz.schemaAttributes<fixtureEntity<F>>[K]>) => FixtureBuilderOf<F>
+  [K in keyof tz.schemaAttributes<fixtureEntity<F>> as `with_${string & K}`]: (value: FixtureInitValue<fixtureEntity<F>, tz.schemaAttributes<fixtureEntity<F>>[K]>) => FixtureBuilderOf<F>
 }
 
 // #endregion

@@ -1,4 +1,5 @@
 import { AnyConstructor, Primitive } from 'ytil'
+import { FixtureProvider } from './fixture.provider'
 import { Fixture, FixtureInit, FixtureModifiersInput } from './types'
 
 export function fixture<E extends AnyConstructor, Init extends () => FixtureInit<E>, Mod extends FixtureModifiersInput<E>>(
@@ -31,4 +32,5 @@ export function fixture<E extends AnyConstructor, Init extends() => FixtureInit<
 export interface FixtureOptions<E extends AnyConstructor> {
   modifiers?: FixtureModifiersInput<E>
   key?: (entity: InstanceType<E>) => Primitive
+  beforeSave?: (this: FixtureProvider, entity: InstanceType<E>) => Promise<void> | void
 }

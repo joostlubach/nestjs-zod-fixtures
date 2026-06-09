@@ -9,6 +9,7 @@ import {
   BoundFixtures,
   DependencySaveOrder,
   FixtureBuildContext,
+  FixtureBuilderOf,
   fixtureInitArgs,
   fixtureInstance,
 } from './types'
@@ -88,7 +89,7 @@ export class FixtureProvider {
     return {
       entityManager: this.entityManager,
       builder:       (fixture, ...args) => {
-        return FixtureBuilder.for(fixture, this, args)
+        return this.builder(fixture, ...args)
       },
       resolve: (value: unknown) => {
         return this.resolveProp(builder, value)
@@ -102,6 +103,10 @@ export class FixtureProvider {
     }
   }
 
+  public builder<F extends AnyFixture>(fixture: F, ...args: fixtureInitArgs<F>): FixtureBuilderOf<F> {
+    return FixtureBuilder.for(fixture, this, args)
+  }
+
   private resolveProp<F extends AnyFixture>(builder: FixtureBuilder<F>, value: unknown): any {
     if (isFixture(value) || isFixtureBuilder(value)) {
       // We assume that toOne relationships are not owned.
@@ -112,7 +117,11 @@ export class FixtureProvider {
       // TODO: Figure out a way to support non-owned toMany relationships as well.
       return value.map(it => this.resolveDependency(builder, it, [], DependencySaveOrder.After))
     } else if (isFunction(value)) {
-      return value.call(this)
+      const retval = value.call(this)
+      if (isFixture(retval) || isFixtureBuilder(retval)) {
+        this.resolveDependency(builder, retval, [], DependencySaveOrder.Before)
+      }
+      return retval
     } else {
       return value
     }
@@ -158,6 +167,8 @@ export class FixtureProvider {
     for (const dependency of dependenciesBefore) {
       await dependency.save()
     }
+
+    await builder.fixture.beforeSave?.call(this, instance)
 
     const repository = this.entityManager.getRepository(builder.fixture.Entity)
     const saved = await repository.save(instance)
