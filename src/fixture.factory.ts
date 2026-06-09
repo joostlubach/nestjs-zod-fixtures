@@ -15,7 +15,7 @@ export function fixture<E extends AnyConstructor, Init extends () => FixtureInit
   Entity: E,
   init: Init,
 ): Fixture<E, Init, Record<never, never>>
-export function fixture<E extends AnyConstructor, Init extends () => FixtureInit<E>>(
+export function fixture<E extends AnyConstructor, Init extends() => FixtureInit<E>>(
   Entity: E,
   init: Init,
   options: FixtureOptions<E> = {},

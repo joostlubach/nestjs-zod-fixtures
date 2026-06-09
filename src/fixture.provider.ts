@@ -87,7 +87,7 @@ export class FixtureProvider {
   private buildModifierContext<F extends AnyFixture>(builder: FixtureBuilder<F>): FixtureBuildContext {
     return {
       entityManager: this.entityManager,
-      builder: (fixture, ...args) => {
+      builder:       (fixture, ...args) => {
         return FixtureBuilder.for(fixture, this, args)
       },
       resolve: (value: unknown) => {
@@ -98,7 +98,7 @@ export class FixtureProvider {
       },
       addDependencyAfter: (arg, ...args) => {
         this.resolveDependency(builder, arg, args, DependencySaveOrder.After)
-      }
+      },
     }
   }
 

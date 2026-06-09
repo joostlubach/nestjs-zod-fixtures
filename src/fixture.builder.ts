@@ -67,9 +67,9 @@ export class FixtureBuilder<F extends AnyFixture> {
       setterName,
       function (instance, value) {
         Object.assign(instance, {
-          [attribute]: this.resolve(value)
+          [attribute]: this.resolve(value),
         })
-      }
+      },
     )
   }
 
