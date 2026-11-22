@@ -1,7 +1,7 @@
 import { isArray } from 'lodash'
 import { EntityManager } from 'typeorm'
-import { tz } from 'typeorm-zod'
-import { AnyConstructor, deepMapValues, isFunction, MapUtil, Primitive } from 'ytil'
+import { tz } from '@mosdev/typeorm-zod'
+import { AnyConstructor, deepMapValues, isFunction, MapUtil, Primitive } from '@mosdev/ytil'
 import { Dependency } from './dependency'
 import { FixtureBuilder } from './fixture.builder'
 import {

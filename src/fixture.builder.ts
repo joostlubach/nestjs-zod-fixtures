@@ -1,5 +1,5 @@
-import { tz } from 'typeorm-zod'
-import { AnyConstructor, isFunction, objectEntries, objectKeys, Primitive } from 'ytil'
+import { tz } from '@mosdev/typeorm-zod'
+import { AnyConstructor, isFunction, objectEntries, objectKeys, Primitive } from '@mosdev/ytil'
 import { fixture } from './fixture.factory'
 import { FixtureProvider } from './fixture.provider'
 import {

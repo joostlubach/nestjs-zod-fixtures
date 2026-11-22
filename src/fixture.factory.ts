@@ -1,4 +1,4 @@
-import { AnyConstructor, Primitive } from 'ytil'
+import { AnyConstructor, Primitive } from '@mosdev/ytil'
 import { FixtureProvider } from './fixture.provider'
 import { Fixture, FixtureInit, FixtureModifiersInput } from './types'
 

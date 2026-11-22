@@ -1,5 +1,5 @@
 {
-  "name": "nestjs-zod-fixtures",
+  "name": "@mosdev/nestjs-zod-fixtures",
   "version": "0.0.1",
   "description": "Zod-based fixtures for NestJS applications",
   "private": true,
@@ -36,7 +36,7 @@
   },
   "dependencies": {
     "lodash": "^4.17.21",
-    "typeorm-zod": "workspace:^",
-    "ytil": "workspace:^"
+    "@mosdev/typeorm-zod": "workspace:^",
+    "@mosdev/ytil": "workspace:^"
   }
 }

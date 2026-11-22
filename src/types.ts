@@ -1,6 +1,6 @@
 import { EntityManager } from 'typeorm'
-import { tz } from 'typeorm-zod'
-import { AnyConstructor, AnyFunction, Constructor, Primitive } from 'ytil'
+import { tz } from '@mosdev/typeorm-zod'
+import { AnyConstructor, AnyFunction, Constructor, Primitive } from '@mosdev/ytil'
 import { FixtureBuilder } from './fixture.builder'
 import { FixtureProvider } from './fixture.provider'
 

@@ -1,4 +1,4 @@
-import { AnyConstructor, isFunction, isPlainObject } from 'ytil'
+import { AnyConstructor, isFunction, isPlainObject } from '@mosdev/ytil'
 import { FixtureBuilder } from './fixture.builder'
 import { AnyFixture, FixtureOf } from './types'
 
